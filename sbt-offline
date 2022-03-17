@@ -1,0 +1,6 @@
+#!/bin/bash
+
+sbt "set offline := true"
+
+# https://stackoverflow.com/a/44593236
+sbt "set updateOptions := updateOptions.value.withCachedResolution(true)"
