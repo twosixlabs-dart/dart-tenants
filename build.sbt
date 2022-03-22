@@ -38,22 +38,15 @@ lazy val commonSettings = {
                                                                                   ExclusionRule( "log4j", "log4j" ),
                                                                                   ExclusionRule( "org.apache.logging.log4j", "log4j-core" ) ),
         // `sbt test` should skip tests tagged IntegrationTest
-        Test / testOptions := Seq( Tests.Argument( "-l", "com.twosixlabs.dart.test.tags.annotations.IntegrationTest" ) ),
+        Test / testOptions := Seq( Tests.Argument( "-l", "annotations.IntegrationTest" ) ),
         // `sbt integration:test` should run only tests tagged IntegrationTest
         IntegrationConfig / parallelExecution := false,
-        IntegrationConfig / testOptions := Seq( Tests.Argument( "-n", "com.twosixlabs.dart.test.tags.annotations.IntegrationTest" ) ),
+        IntegrationConfig / testOptions := Seq( Tests.Argument( "-n", "annotations.IntegrationTest" ) ),
         // `sbt wip:test` should run only tests tagged WipTest
-        WipConfig / testOptions := Seq( Tests.Argument( "-n", "com.twosixlabs.dart.test.tags.annotations.WipTest" ) ) )
+        WipConfig / testOptions := Seq( Tests.Argument( "-n", "annotations.WipTest" ) ) )
 }
 
-lazy val publishSettings = Seq(
-    publishTo := {
-        // TODO
-        None
-    },
-    publishMavenStyle := true )
-
-lazy val disablePublish = Seq( publish := {} )
+lazy val disablePublish = Seq( skip.in( publish ) := true )
 
 lazy val assemblySettings = Seq(
     libraryDependencies ++= scalatra ++ jackson,
@@ -66,6 +59,23 @@ lazy val assemblySettings = Seq(
     test in assembly := {},
     mainClass in(Compile, run) := Some( "Main" ) )
 
+sonatypeProfileName := "com.twosixlabs"
+inThisBuild(List(
+    organization := "com.twosixlabs.dart.tenants",
+    homepage := Some(url("https://github.com/twosixlabs-dart/dart-tenants")),
+    licenses := List("GNU-Affero-3.0" -> url("https://www.gnu.org/licenses/agpl-3.0.en.html")),
+    developers := List(
+        Developer(
+            "twosixlabs-dart",
+            "Two Six Technologies",
+            "",
+            url("https://github.com/twosixlabs-dart")
+        )
+    )
+))
+
+ThisBuild / sonatypeCredentialHost := "s01.oss.sonatype.org"
+ThisBuild / sonatypeRepository := "https://s01.oss.sonatype.org/service/local"
 
 /*
    ##############################################################################################
@@ -85,7 +95,6 @@ lazy val tenantsApi = ( project in file( "tenants-api" ) )
   .disablePlugins( sbtassembly.AssemblyPlugin )
   .settings(
       commonSettings,
-      publishSettings,
       libraryDependencies ++= jackson
                               ++ logging
                               ++ dartCommons
@@ -99,7 +108,6 @@ lazy val tenantsControllers = ( project in file( "tenants-controllers" ) )
   .configs( IntegrationConfig, WipConfig )
   .disablePlugins( sbtassembly.AssemblyPlugin )
   .settings( commonSettings,
-             publishSettings,
              libraryDependencies ++= dartRest ++ dartAuth ++ jackson ++ scalatra,
              dependencyOverrides ++= Seq( "com.twosixlabs.dart" %% "dart-auth-commons" % dartAuthVersion,
                                           "com.fasterxml.jackson.core" % "jackson-databind" % jacksonVersion,
@@ -133,7 +141,6 @@ lazy val tenantsClient = ( project in file( "tenants-client" ) )
   .configs( IntegrationConfig, WipConfig )
   .disablePlugins( sbtassembly.AssemblyPlugin )
   .settings( commonSettings,
-             publishSettings,
              libraryDependencies ++= betterFiles ++ okhttp ++ jackson )
 
 ThisBuild / useCoursier := false

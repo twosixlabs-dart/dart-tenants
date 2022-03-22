@@ -7,15 +7,12 @@ import com.twosixlabs.dart.auth.tenant.indices.InMemoryCorpusTenantIndex
 import com.twosixlabs.dart.auth.user.DartUser
 import com.twosixlabs.dart.rest.scalatra.models.FailureResponse
 import com.twosixlabs.dart.tenants.api.m
-import com.twosixlabs.dart.test.tags.annotations.WipTest
-import org.scalatest.flatspec.AnyFlatSpecLike
 import org.scalatra.test.scalatest._
 
 import javax.servlet.http.HttpServletRequest
 import scala.concurrent.Await
 import scala.concurrent.duration.DurationInt
 
-@WipTest
 class DartTenantsControllerTest extends ScalatraFlatSpec {
 
     val index = new InMemoryCorpusTenantIndex()
