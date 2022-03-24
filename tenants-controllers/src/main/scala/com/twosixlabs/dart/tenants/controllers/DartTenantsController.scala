@@ -2,19 +2,19 @@ package com.twosixlabs.dart.tenants.controllers
 
 import com.twosixlabs.dart.auth.controllers.SecureDartController
 import com.twosixlabs.dart.auth.controllers.SecureDartController.AuthDependencies
-import com.twosixlabs.dart.auth.permissions.DartOperations.{CreateTenant, RetrieveTenant}
-import com.twosixlabs.dart.auth.tenant.CorpusTenantIndex.{DocIdAlreadyInTenantException, DocIdMissingFromTenantException, InvalidTenantIdException, NonAtomicTenantIndexFailureException, TenantAlreadyExistsException, TenantNotFoundException}
-import com.twosixlabs.dart.auth.tenant.{CorpusTenantIndex, GlobalCorpus}
+import com.twosixlabs.dart.auth.permissions.DartOperations.{ CreateTenant, RetrieveTenant, SearchCorpus, TenantOperation, ViewTenant }
+import com.twosixlabs.dart.auth.tenant.CorpusTenantIndex.{ DocIdAlreadyInTenantException, DocIdMissingFromTenantException, InvalidTenantIdException, NonAtomicTenantIndexFailureException, TenantAlreadyExistsException, TenantNotFoundException }
+import com.twosixlabs.dart.auth.tenant.{ CorpusTenantIndex, DartTenant, GlobalCorpus }
 import com.twosixlabs.dart.auth.user.DartUser
 import com.twosixlabs.dart.exceptions.ExceptionImplicits.FutureExceptionLogging
-import com.twosixlabs.dart.exceptions.{AuthorizationException, BadQueryParameterException, BadRequestBodyException, ResourceNotFoundException}
+import com.twosixlabs.dart.exceptions.{ AuthorizationException, BadQueryParameterException, BadRequestBodyException, ResourceNotFoundException }
 import com.twosixlabs.dart.rest.scalatra.AsyncDartScalatraServlet
 import com.twosixlabs.dart.utils.JsonHelper.unmarshal
-import org.hungerford.rbac.{PermissibleSet, PermissionSource}
-import org.scalatra.{Created, MethodOverride, Ok}
+import org.hungerford.rbac.{ PermissibleSet, PermissionSource }
+import org.scalatra.{ Created, MethodOverride, Ok }
 
-import scala.concurrent.{ExecutionContext, Future}
-import scala.util.{Failure, Success, Try}
+import scala.concurrent.{ ExecutionContext, Future }
+import scala.util.{ Failure, Success, Try }
 
 object DartTenantsController {
     trait Dependencies extends SecureDartController.Dependencies {
@@ -67,9 +67,15 @@ class DartTenantsController( dependencies : DartTenantsController.Dependencies )
     override protected implicit def executor : ExecutionContext = corpusTenantIndex.executionContext
 
     get( "/" ) ( handleOutput( AuthenticateRoute.withUser { implicit user : DartUser =>
-        RetrieveTenant.from( GlobalCorpus ).secureDart {
-            corpusTenantIndex.allTenants.map( _.filter( _.parent == GlobalCorpus ).map( _.id ) )
-        } logged
+        corpusTenantIndex.allTenants.map { tenants =>
+            val permittedTenants = tenants.filter( v => {
+                v.parent == GlobalCorpus &&
+                  user.roles.permissions.permits( ViewTenant( v ) )
+            } ).map( _.id )
+            if ( user.roles.permissions.permits( ViewTenant( GlobalCorpus ) ) )
+                DartTenant.globalId +: permittedTenants
+            else permittedTenants
+        }
     } ) )
 
     post( "/:tenantId" ) ( handleOutput( AuthenticateRoute.withUser { implicit user : DartUser =>

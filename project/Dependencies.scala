@@ -18,7 +18,7 @@ object Dependencies {
     val cdr4sVersion = "3.0.9"
     val dartCommonsVersion = "3.0.30"
     val dartRestVersion = "3.0.4"
-    val dartAuthVersion = "3.1.11"
+    val dartAuthVersion = "3.1.14"
     val typesafeConfigVersion = "1.4.1"
     val dartEsVersion = "3.1.11"
 
