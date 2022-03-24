@@ -1,16 +1,18 @@
 package com.twosixlabs.dart.tenants
 
 import com.twosixlabs.dart.auth.controllers.SecureDartController
-import com.twosixlabs.dart.auth.tenant.indices.{ArangoCorpusTenantIndex, KeycloakCorpusTenantIndex, ParallelCorpusTenantIndex}
+import com.twosixlabs.dart.auth.tenant.CorpusTenantIndex
+import com.twosixlabs.dart.auth.tenant.indices.{ ArangoCorpusTenantIndex, InMemoryCorpusTenantIndex, KeycloakCorpusTenantIndex, ParallelCorpusTenantIndex }
 import com.twosixlabs.dart.rest.ApiStandards
 import com.twosixlabs.dart.rest.scalatra.DartRootServlet
 import com.twosixlabs.dart.search.ElasticsearchCorpusTenantIndex
 import com.twosixlabs.dart.tenants.controllers.DartTenantsController
-import com.typesafe.config.{Config, ConfigFactory}
+import com.typesafe.config.{ Config, ConfigFactory }
 import org.scalatra.LifeCycle
-import org.slf4j.{Logger, LoggerFactory}
+import org.slf4j.{ Logger, LoggerFactory }
 
 import javax.servlet.ServletContext
+import scala.util.Try
 
 class ScalatraInit extends LifeCycle {
 
@@ -20,15 +22,21 @@ class ScalatraInit extends LifeCycle {
 
     val authDependencies : SecureDartController.AuthDependencies = SecureDartController.authDeps( config )
 
-    val keycloakTenantIndex : KeycloakCorpusTenantIndex = KeycloakCorpusTenantIndex( config )
-    val arangoTenantIndex : ArangoCorpusTenantIndex = ArangoCorpusTenantIndex( config )
-    val elasticsearchTenantIndex : ElasticsearchCorpusTenantIndex = ElasticsearchCorpusTenantIndex( config )
+    val testMode = Try( config.getBoolean( "tenants.test.mode" ) )
+      .getOrElse( config.getString( "tenants.test.mode" ).toLowerCase.trim == "true" )
 
-    val tenantIndex : ParallelCorpusTenantIndex = new ParallelCorpusTenantIndex(
-        arangoTenantIndex,
-        keycloakTenantIndex,
-        elasticsearchTenantIndex,
-        )
+    val tenantIndex : CorpusTenantIndex =
+        if ( testMode ) new InMemoryCorpusTenantIndex()
+        else {
+            val keycloakTenantIndex : KeycloakCorpusTenantIndex = KeycloakCorpusTenantIndex( config )
+            val arangoTenantIndex : ArangoCorpusTenantIndex = ArangoCorpusTenantIndex( config )
+            val elasticsearchTenantIndex : ElasticsearchCorpusTenantIndex = ElasticsearchCorpusTenantIndex( config )
+            new ParallelCorpusTenantIndex(
+                arangoTenantIndex,
+                keycloakTenantIndex,
+                elasticsearchTenantIndex,
+            )
+        }
 
     val tenantsController : DartTenantsController = {
         DartTenantsController( tenantIndex, authDependencies )
