@@ -22,6 +22,8 @@ class ScalatraInit extends LifeCycle {
 
     val authDependencies : SecureDartController.AuthDependencies = SecureDartController.authDeps( config )
 
+    val allowedOrigins = Try( config.getString( "cors.allowed.origins" ) ).getOrElse( "*" )
+
     val testMode = Try( config.getBoolean( "tenants.test.mode" ) )
       .getOrElse( config.getString( "tenants.test.mode" ).toLowerCase.trim == "true" )
 
@@ -51,7 +53,7 @@ class ScalatraInit extends LifeCycle {
 
     // Initialize scalatra: mounts servlets
     override def init( context : ServletContext ) : Unit = {
-//        context.initParameters( "org.scalatra.cors.allowedOrigins" ) = allowedOrigins
+        context.setInitParameter( "org.scalatra.cors.allowedOrigins", allowedOrigins )
         context.mount( rootController, "/*" )
         context.mount( tenantsController, basePath + "/*" )
     }
