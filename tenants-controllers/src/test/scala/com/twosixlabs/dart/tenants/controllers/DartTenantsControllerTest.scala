@@ -1,8 +1,9 @@
 package com.twosixlabs.dart.tenants.controllers
 
-import com.twosixlabs.dart.auth.groups.ProgramManager
-import com.twosixlabs.dart.auth.tenant.CorpusTenantIndex.{TenantAlreadyExistsException, TenantNotFoundException}
-import com.twosixlabs.dart.auth.tenant.{CorpusTenant, CorpusTenantIndex, GlobalCorpus}
+import com.twosixlabs.dart.auth.groups.{ DartGroup, ProgramManager, TenantGroup }
+import com.twosixlabs.dart.auth.permissions.DartGroupRole
+import com.twosixlabs.dart.auth.tenant.CorpusTenantIndex.{ TenantAlreadyExistsException, TenantNotFoundException }
+import com.twosixlabs.dart.auth.tenant.{ CorpusTenant, CorpusTenantIndex, GlobalCorpus, Leader, ReadOnly }
 import com.twosixlabs.dart.auth.tenant.indices.InMemoryCorpusTenantIndex
 import com.twosixlabs.dart.auth.user.DartUser
 import com.twosixlabs.dart.rest.scalatra.models.FailureResponse
@@ -35,14 +36,27 @@ class DartTenantsControllerTest extends ScalatraFlatSpec {
         override def authenticateUser( req : HttpServletRequest ) : DartUser = DartUser( "test", Set( ProgramManager ) )
     }
 
-    addServlet( tenantsController, "/*" )
+    val authTenantsController = new DartTenantsController( dependencies ) {
+        // a second controller that will always authenticate as a user with read-only access to test-tenant-1 write access to test-tenant-3
+        override def authenticateUser( req : HttpServletRequest ) : DartUser = DartUser( "auth-test", Set( TenantGroup( CorpusTenant( "test-tenant-3", GlobalCorpus ), Leader ), TenantGroup( CorpusTenant( "test-tenant-1", GlobalCorpus ), ReadOnly ) ) )
+    }
+
+    addServlet( tenantsController, "/pm/*" )
+    addServlet( authTenantsController, "/ro/*" )
 
     behavior of "GET /"
 
-    it should "return list of tenants" in {
-        get( "/" ) {
+    it should "return list of all tenants including global if permissions are super-user" in {
+        get( "/pm/" ) {
             response.status shouldBe 200
-            m.readValue( response.body, classOf[ List[ String ] ] ).toSet shouldBe Set( "test-tenant-1", "test-tenant-2", "test-tenant-3" )
+            m.readValue( response.body, classOf[ List[ String ] ] ).toSet shouldBe Set( "global", "test-tenant-1", "test-tenant-2", "test-tenant-3" )
+        }
+    }
+
+    it should "return a list of only those those tenants that client has at least read access to" in {
+        get( "/ro/" ) {
+            response.status shouldBe 200
+            m.readValue( response.body, classOf[ List[ String ] ] ).toSet shouldBe Set( "test-tenant-1", "test-tenant-3" )
         }
     }
 
@@ -50,7 +64,7 @@ class DartTenantsControllerTest extends ScalatraFlatSpec {
 
     it should "add tenantId to index and return 201 when tenantId is valid and untaken" in {
         a[ TenantNotFoundException ] should be thrownBy Await.result( index.tenant( "test-tenant-4" ), 5.seconds )
-        post( "/test-tenant-4" ) {
+        post( "/pm/test-tenant-4" ) {
             println( response.body )
             response.status shouldBe 201
             response.body.isEmpty shouldBe true
@@ -59,7 +73,7 @@ class DartTenantsControllerTest extends ScalatraFlatSpec {
     }
 
     it should "return 400 and an appropriate message if tenantId already exists" in {
-        post( "/test-tenant-1" ) {
+        post( "/pm/test-tenant-1" ) {
             response.status shouldBe 400
             val res = m.readValue( response.body, classOf[ FailureResponse ] )
             res.status shouldBe 400
@@ -68,7 +82,7 @@ class DartTenantsControllerTest extends ScalatraFlatSpec {
     }
 
     it should "return 400 and an appropriate message if tenantId is invalid" in {
-        post( "/test.~tenant" ) {
+        post( "/pm/test.~tenant" ) {
             response.status shouldBe 400
             val res = m.readValue( response.body, classOf[ FailureResponse ] )
             res.status shouldBe 400
@@ -77,7 +91,7 @@ class DartTenantsControllerTest extends ScalatraFlatSpec {
     }
 
     it should "return 400 and an appropriate message if tenantId is global" in {
-        post( "/global" ) {
+        post( "/pm/global" ) {
             response.status shouldBe 400
             val res = m.readValue( response.body, classOf[ FailureResponse ] )
             res.status shouldBe 400
@@ -89,7 +103,7 @@ class DartTenantsControllerTest extends ScalatraFlatSpec {
 
     it should "delete a tenant and return 200 if tenant exists" in {
         Await.result( index.addDocumentsToTenant(  List( "doc-id-1", "doc-id-2", "doc-id-3" ), "test-tenant-4" ), 5.seconds )
-        delete( "/test-tenant-4" ) {
+        delete( "/pm/test-tenant-4" ) {
             response.status shouldBe 200
             response.body.isEmpty shouldBe true
             a[ TenantNotFoundException ] should be thrownBy( Await.result( index.tenant( "test-tenant-4" ), 5.seconds ) )
@@ -98,14 +112,14 @@ class DartTenantsControllerTest extends ScalatraFlatSpec {
     }
 
     it should "return 400 if tenantId is global" in {
-        delete( "/global" ) {
+        delete( "/pm/global" ) {
             response.status shouldBe 400
             response.body should include( "cannot delete global corpus" )
         }
     }
 
     it should "return 404 if tenantId does not exist" in {
-        delete( "/test-tenant-4" ) {
+        delete( "/pm/test-tenant-4" ) {
             response.status shouldBe 404
             response.body should include( "test-tenant-4" )
         }
@@ -115,21 +129,21 @@ class DartTenantsControllerTest extends ScalatraFlatSpec {
 
     it should "return a list of documents when tenantId exists and has documents" in {
         Await.result( index.addDocumentsToTenant( List( "doc-id-1", "doc-id-2", "doc-id-3" ), "test-tenant-1" ), 5.seconds )
-        get( "/test-tenant-1/documents" ) {
+        get( "/pm/test-tenant-1/documents" ) {
             response.status shouldBe 200
             m.readValue( response.body, classOf[ List[ String ] ] ).toSet shouldBe Set( "doc-id-1", "doc-id-2", "doc-id-3" )
         }
     }
 
     it should "return empty list of documents when tenantId exists but has not documents" in {
-        get( "/test-tenant-2/documents" ) {
+        get( "/pm/test-tenant-2/documents" ) {
             response.status shouldBe 200
             m.readValue( response.body, classOf[ List[ String ] ] ).isEmpty shouldBe true
         }
     }
 
     it should "return 400 if tenantId is global" in {
-        get( "/global/documents" ) {
+        get( "/pm/global/documents" ) {
             response.status shouldBe 400
             response.body should include( "cannot retrieve global document list" )
         }
@@ -138,28 +152,28 @@ class DartTenantsControllerTest extends ScalatraFlatSpec {
     behavior of "POST /:tenantId/documents"
 
     it should "return 200 if tenant exists and request includes valid query parameter" in {
-        post( "/test-tenant-2/documents", Some( "docIds" -> "doc-id-1, doc-id-2,doc-id-3, doc-id-4 ,  doc-id-5" ) ) {
+        post( "/pm/test-tenant-2/documents", Some( "docIds" -> "doc-id-1, doc-id-2,doc-id-3, doc-id-4 ,  doc-id-5" ) ) {
             response.status shouldBe 200
             Await.result( index.tenantDocuments( "test-tenant-2" ), 5.seconds ).toSet shouldBe Set( "doc-id-1", "doc-id-2", "doc-id-3", "doc-id-4", "doc-id-5" )
         }
     }
 
     it should "return 200 if tenant exists and request includes body of valid json list of doc ids" in {
-        post( "/test-tenant-3/documents", """["doc-id-a","doc-id-b","doc-id-c","doc-id-d","doc-id-e"]""" ) {
+        post( "/pm/test-tenant-3/documents", """["doc-id-a","doc-id-b","doc-id-c","doc-id-d","doc-id-e"]""" ) {
             response.status shouldBe 200
             Await.result( index.tenantDocuments( "test-tenant-3" ), 5.seconds ).toSet shouldBe Set( "doc-id-a", "doc-id-b", "doc-id-c", "doc-id-d", "doc-id-e" )
         }
     }
 
     it should "return 200 if tenant exists and request includes body of valid json list of doc ids and valid docIds query parameter" in {
-        submit( "POST", "/test-tenant-1/documents", Some( "docIds" -> "doc-id-4, doc-id-5" ), None, """["doc-id-a","doc-id-b","doc-id-c","doc-id-d","doc-id-e"]""" ) {
+        submit( "POST", "/pm/test-tenant-1/documents", Some( "docIds" -> "doc-id-4, doc-id-5" ), None, """["doc-id-a","doc-id-b","doc-id-c","doc-id-d","doc-id-e"]""" ) {
             response.status shouldBe 200
             Await.result( index.tenantDocuments( "test-tenant-1" ), 5.seconds ).toSet shouldBe Set( "doc-id-1", "doc-id-2", "doc-id-3", "doc-id-4", "doc-id-5", "doc-id-a", "doc-id-b", "doc-id-c", "doc-id-d", "doc-id-e" )
         }
     }
 
     it should "return 400 and appropriate message if tenantId exists but request includes neither query paramter nor json body" in {
-        post( "/test-tenant-1/documents" ) {
+        post( "/pm/test-tenant-1/documents" ) {
             response.status shouldBe 400
             val res = m.readValue( response.body, classOf[ FailureResponse ] )
             res.status shouldBe 400
@@ -168,7 +182,7 @@ class DartTenantsControllerTest extends ScalatraFlatSpec {
     }
 
     it should "return 400 and appropriate message if tenantId is global" in {
-        post( "/global/documents", Some( "docIds" -> "doc-id-1, doc-id-2,doc-id-3, doc-id-4 ,  doc-id-5" ) ) {
+        post( "/pm/global/documents", Some( "docIds" -> "doc-id-1, doc-id-2,doc-id-3, doc-id-4 ,  doc-id-5" ) ) {
             response.status shouldBe 400
             val res = m.readValue( response.body, classOf[ FailureResponse ] )
             res.status shouldBe 400
@@ -177,7 +191,7 @@ class DartTenantsControllerTest extends ScalatraFlatSpec {
     }
 
     it should "return 400 and appropriate message if document is already in index" in {
-        post( "/test-tenant-2/documents", Some( "docIds" -> "doc-id-2" ) ) {
+        post( "/pm/test-tenant-2/documents", Some( "docIds" -> "doc-id-2" ) ) {
             response.status shouldBe 400
             val res = m.readValue( response.body, classOf[ FailureResponse ] )
             res.status shouldBe 400
@@ -186,7 +200,7 @@ class DartTenantsControllerTest extends ScalatraFlatSpec {
     }
 
     it should "return 404 and appropriate message if tenantId does not exist but request body/query is otherwise valid" in {
-        submit( "POST", "/non-existent-tenant/documents", Some( "docIds" -> "doc-id-4, doc-id-5" ), None, """["doc-id-a","doc-id-b","doc-id-c","doc-id-d","doc-id-e"]""" ) {
+        submit( "POST", "/pm/non-existent-tenant/documents", Some( "docIds" -> "doc-id-4, doc-id-5" ), None, """["doc-id-a","doc-id-b","doc-id-c","doc-id-d","doc-id-e"]""" ) {
             response.status shouldBe 404
             val res = m.readValue( response.body, classOf[ FailureResponse ] )
             res.status shouldBe 404
@@ -197,7 +211,7 @@ class DartTenantsControllerTest extends ScalatraFlatSpec {
     behavior of "POST /:tenantId/documents/remove"
 
     it should "delete documents and return 200 if the tenant exists and the documents from query parameter are in it" in {
-        post( "/test-tenant-1/documents/remove", Some( "docIds" -> "doc-id-4, doc-id-5" ) ) {
+        post( "/pm/test-tenant-1/documents/remove", Some( "docIds" -> "doc-id-4, doc-id-5" ) ) {
             response.status shouldBe 200
             response.body should have length 0
             Await.result( index.tenantDocuments( "test-tenant-1" ), 5.seconds ).toSet shouldBe Set( "doc-id-1", "doc-id-2", "doc-id-3", "doc-id-a", "doc-id-b", "doc-id-c", "doc-id-d", "doc-id-e" )
@@ -205,7 +219,7 @@ class DartTenantsControllerTest extends ScalatraFlatSpec {
     }
 
     it should "return 400 and an appropriate message if the tenant exists but docIds query parameter is missing" in {
-        post( "/test-tenant-1/documents/remove" ) {
+        post( "/pm/test-tenant-1/documents/remove" ) {
             response.status shouldBe 400
             val res = m.readValue( response.body, classOf[ FailureResponse ] )
             res.status shouldBe 400
@@ -213,7 +227,7 @@ class DartTenantsControllerTest extends ScalatraFlatSpec {
     }
 
     it should "return 400 and appropriate message if tenantId is global" in {
-        post( "/global/documents/remove", Some( "docIds" -> "doc-id-4, doc-id-5" ) ) {
+        post( "/pm/global/documents/remove", Some( "docIds" -> "doc-id-4, doc-id-5" ) ) {
             response.status shouldBe 400
             val res = m.readValue( response.body, classOf[ FailureResponse ] )
             res.status shouldBe 400
@@ -222,7 +236,7 @@ class DartTenantsControllerTest extends ScalatraFlatSpec {
     }
 
     it should "return 404 and if tenant does not exist" in {
-        post( "/non-existent-tenant/documents/remove", Some( "docIds" -> "doc-id-4, doc-id-5" ) ) {
+        post( "/pm/non-existent-tenant/documents/remove", Some( "docIds" -> "doc-id-4, doc-id-5" ) ) {
             response.status shouldBe 404
             val res = m.readValue( response.body, classOf[ FailureResponse ] )
             res.status shouldBe 404
@@ -231,7 +245,7 @@ class DartTenantsControllerTest extends ScalatraFlatSpec {
     }
 
     it should "return 404 and if doc id is not in tenant" in {
-        post( "/test-tenant-1/documents/remove", Some( "docIds" -> "non-existent-doc-id" ) ) {
+        post( "/pm/test-tenant-1/documents/remove", Some( "docIds" -> "non-existent-doc-id" ) ) {
             response.status shouldBe 404
             val res = m.readValue( response.body, classOf[ FailureResponse ] )
             res.status shouldBe 404
@@ -246,7 +260,7 @@ class DartTenantsControllerTest extends ScalatraFlatSpec {
         val docs = Await.result( index.tenantDocuments( "test-tenant-1" ), 5.seconds )
         docs.nonEmpty shouldBe true
 
-        post( "/test-tenant-1/clone/new-test-tenant" ) {
+        post( "/pm/test-tenant-1/clone/new-test-tenant" ) {
             response.status shouldBe 201
             response.body.isEmpty shouldBe true
 
@@ -258,7 +272,7 @@ class DartTenantsControllerTest extends ScalatraFlatSpec {
     }
 
     it should "return 404 if tenantId is non-existent" in {
-        post( "/non-existent-tenant/clone/new-test-tenant" ) {
+        post( "/pm/non-existent-tenant/clone/new-test-tenant" ) {
             response.status shouldBe 404
             val res = m.readValue( response.body, classOf[ FailureResponse ] )
             res.status shouldBe 404
@@ -267,7 +281,7 @@ class DartTenantsControllerTest extends ScalatraFlatSpec {
     }
 
     it should "return 400 if newTenantId already exists" in {
-        post( "/test-tenant-1/clone/test-tenant-2" ) {
+        post( "/pm/test-tenant-1/clone/test-tenant-2" ) {
             response.status shouldBe 400
             val res = m.readValue( response.body, classOf[ FailureResponse ] )
             res.status shouldBe 400
@@ -276,7 +290,7 @@ class DartTenantsControllerTest extends ScalatraFlatSpec {
     }
 
     it should "return 400 if newTenantId is invalid" in {
-        post( "/test-tenant-1/clone/invalid_tenant" ) {
+        post( "/pm/test-tenant-1/clone/invalid_tenant" ) {
             response.status shouldBe 400
             val res = m.readValue( response.body, classOf[ FailureResponse ] )
             res.status shouldBe 400
