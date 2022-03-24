@@ -15,13 +15,12 @@ object Dependencies {
     val scalaMockVersion = "4.1.0"
     val tapirVersion = "0.17.19"
     val json4sVersion = "3.6.11"
-    val cdr4sApisVersion = "2.0.76"
-    val cdr4sVersion = "3.0.258"
-    val dartCommonsVersion = "3.0.285"
-    val dartRestVersion = "3.0.15"
-    val dartAuthVersion = "3.1.159"
+    val cdr4sVersion = "3.0.9"
+    val dartCommonsVersion = "3.0.30"
+    val dartRestVersion = "3.0.4"
+    val dartAuthVersion = "3.1.11"
     val typesafeConfigVersion = "1.4.1"
-    val dartEsVersion = "3.1.78"
+    val dartEsVersion = "3.1.11"
 
     val logging = Seq( "org.slf4j" % "slf4j-api" % slf4jVersion,
                        "ch.qos.logback" % "logback-classic" % logbackVersion )
@@ -53,8 +52,6 @@ object Dependencies {
 
     val cdr4s = Seq( "com.twosixlabs.cdr4s" %% "cdr4s-core" % cdr4sVersion,
                      "com.twosixlabs.cdr4s" %% "cdr4s-dart-json" % cdr4sVersion )
-
-    val cdr4sApis = Seq( "com.twosixlabs.cdr4s" %% "cdr4s-apis" % cdr4sApisVersion )
 
     val dartCommons = Seq( "com.twosixlabs.dart" %% "dart-test-base" % dartCommonsVersion )
 
