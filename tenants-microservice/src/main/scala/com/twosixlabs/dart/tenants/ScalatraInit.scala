@@ -13,6 +13,7 @@ import org.slf4j.{ Logger, LoggerFactory }
 
 import javax.servlet.ServletContext
 import scala.util.Try
+import scala.util.matching.Regex
 
 class ScalatraInit extends LifeCycle {
 
@@ -22,21 +23,29 @@ class ScalatraInit extends LifeCycle {
 
     val authDependencies : SecureDartController.AuthDependencies = SecureDartController.authDeps( config )
 
+    val allowedOrigins = Try( config.getString( "cors.allowed.origins" ) ).getOrElse( "*" )
+
     val testMode = Try( config.getBoolean( "tenants.test.mode" ) )
       .getOrElse( config.getString( "tenants.test.mode" ).toLowerCase.trim == "true" )
 
-    val tenantIndex : CorpusTenantIndex =
-        if ( testMode ) new InMemoryCorpusTenantIndex()
-        else {
-            val keycloakTenantIndex : KeycloakCorpusTenantIndex = KeycloakCorpusTenantIndex( config )
-            val arangoTenantIndex : ArangoCorpusTenantIndex = ArangoCorpusTenantIndex( config )
-            val elasticsearchTenantIndex : ElasticsearchCorpusTenantIndex = ElasticsearchCorpusTenantIndex( config )
-            new ParallelCorpusTenantIndex(
-                arangoTenantIndex,
-                keycloakTenantIndex,
-                elasticsearchTenantIndex,
-            )
+    val InMemoryPattern : Regex = """^in[-_]*memory$""".r
+
+    def getIndex( i : String ) : Option[ CorpusTenantIndex ] = {
+        Try( config.getString( s"index.$i" ) ).toOption.map( _.trim.toLowerCase ) flatMap {
+            case "arango" => Some( ArangoCorpusTenantIndex( config ) )
+            case "elasticsearch" => Some( ElasticsearchCorpusTenantIndex( config ) )
+            case "keycloak" => Some( KeycloakCorpusTenantIndex( config ) )
+            case "test" => Some( new InMemoryCorpusTenantIndex() )
+            case InMemoryPattern() => Some( new InMemoryCorpusTenantIndex() )
+            case _ => None
         }
+    }
+
+    val tenantIndex : CorpusTenantIndex = {
+        val master : CorpusTenantIndex = getIndex( "master" ).getOrElse( throw new IllegalStateException( "Must provide valid master index (INDEX_MASTER)" ) )
+        val indices = master +: ( 1 to 10 ).flatMap( i =>  getIndex( i.toString ) )
+        new ParallelCorpusTenantIndex( master, indices : _* )
+    }
 
     val tenantsController : DartTenantsController = {
         DartTenantsController( tenantIndex, authDependencies )
@@ -51,7 +60,7 @@ class ScalatraInit extends LifeCycle {
 
     // Initialize scalatra: mounts servlets
     override def init( context : ServletContext ) : Unit = {
-//        context.initParameters( "org.scalatra.cors.allowedOrigins" ) = allowedOrigins
+        context.setInitParameter( "org.scalatra.cors.allowedOrigins", allowedOrigins )
         context.mount( rootController, "/*" )
         context.mount( tenantsController, basePath + "/*" )
     }

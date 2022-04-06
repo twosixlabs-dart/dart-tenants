@@ -11,7 +11,7 @@ import com.twosixlabs.dart.exceptions.{ AuthorizationException, BadQueryParamete
 import com.twosixlabs.dart.rest.scalatra.AsyncDartScalatraServlet
 import com.twosixlabs.dart.utils.JsonHelper.unmarshal
 import org.hungerford.rbac.{ PermissibleSet, PermissionSource }
-import org.scalatra.{ Created, MethodOverride, Ok }
+import org.scalatra.{ CorsSupport, Created, MethodOverride, Ok }
 
 import scala.concurrent.{ ExecutionContext, Future }
 import scala.util.{ Failure, Success, Try }
@@ -53,7 +53,7 @@ object DartTenantsController {
 }
 
 class DartTenantsController( dependencies : DartTenantsController.Dependencies )
-  extends AsyncDartScalatraServlet with SecureDartController {
+  extends AsyncDartScalatraServlet with SecureDartController with CorsSupport {
 
     override val serviceName : String = dependencies.serviceName
     override val secretKey : Option[ String ] = dependencies.secretKey
