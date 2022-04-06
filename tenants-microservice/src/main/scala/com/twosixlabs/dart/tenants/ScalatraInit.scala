@@ -37,6 +37,7 @@ class ScalatraInit extends LifeCycle {
             case "keycloak" => Some( KeycloakCorpusTenantIndex( config ) )
             case "test" => Some( new InMemoryCorpusTenantIndex() )
             case InMemoryPattern() => Some( new InMemoryCorpusTenantIndex() )
+            case _ => None
         }
     }
 
