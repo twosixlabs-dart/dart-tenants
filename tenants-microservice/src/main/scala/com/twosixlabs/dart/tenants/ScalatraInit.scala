@@ -43,7 +43,8 @@ class ScalatraInit extends LifeCycle {
 
     val tenantIndex : CorpusTenantIndex = {
         val master : CorpusTenantIndex = getIndex( "master" ).getOrElse( throw new IllegalStateException( "Must provide valid master index (INDEX_MASTER)" ) )
-        val indices = master +: ( 1 to 10 ).flatMap( i =>  getIndex( i.toString ) )
+        val indices = ( 1 to 10 ).flatMap( i =>  getIndex( i.toString ) )
+        println( ( master +: indices ).mkString( "TENANT INDICES\n==============\n", "\n", "\n" ) )
         new ParallelCorpusTenantIndex( master, indices : _* )
     }
 
