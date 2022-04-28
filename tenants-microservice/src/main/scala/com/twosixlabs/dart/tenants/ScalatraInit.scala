@@ -25,9 +25,6 @@ class ScalatraInit extends LifeCycle {
 
     val allowedOrigins = Try( config.getString( "cors.allowed.origins" ) ).getOrElse( "*" )
 
-    val testMode = Try( config.getBoolean( "tenants.test.mode" ) )
-      .getOrElse( config.getString( "tenants.test.mode" ).toLowerCase.trim == "true" )
-
     val InMemoryPattern : Regex = """^in[-_]*memory$""".r
 
     def getIndex( i : String ) : Option[ CorpusTenantIndex ] = {
