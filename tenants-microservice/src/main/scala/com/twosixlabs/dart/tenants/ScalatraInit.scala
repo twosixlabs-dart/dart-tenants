@@ -12,7 +12,7 @@ import org.scalatra.LifeCycle
 import org.slf4j.{ Logger, LoggerFactory }
 
 import javax.servlet.ServletContext
-import scala.util.Try
+import scala.util.{ Failure, Success, Try }
 import scala.util.matching.Regex
 
 class ScalatraInit extends LifeCycle {
@@ -28,10 +28,15 @@ class ScalatraInit extends LifeCycle {
     val InMemoryPattern : Regex = """^in[-_]*memory$""".r
 
     def getIndex( i : String ) : Option[ CorpusTenantIndex ] = {
-        Try( config.getString( s"index.$i" ) ).toOption.map( _.trim.toLowerCase ) flatMap {
-            case "arango" => Some( ArangoCorpusTenantIndex( config ) )
-            case "elasticsearch" => Some( ElasticsearchCorpusTenantIndex( config ) )
-            case "keycloak" => Some( KeycloakCorpusTenantIndex( config ) )
+        Try( config.getString( s"index.$i" ) )
+          .toOption
+          .map( _.trim.toLowerCase ) flatMap {
+            case "arango" =>
+                Some( ArangoCorpusTenantIndex( config ) )
+            case "elasticsearch" =>
+                Some( ElasticsearchCorpusTenantIndex( config ) )
+            case "keycloak" =>
+                Some( KeycloakCorpusTenantIndex( config ) )
             case "test" => Some( new InMemoryCorpusTenantIndex() )
             case InMemoryPattern() => Some( new InMemoryCorpusTenantIndex() )
             case _ => None
